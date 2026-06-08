@@ -12,10 +12,8 @@
 
   <script>
     window.gameConfig = {
-      // WAFlash는 일부 환경에서 상대 경로 로딩이 멈출 수 있어 실행 시 절대 URL로 변환합니다.
       swfUrl: "assets/bubble-bobble-2.waf"
     };
-
     window.wafOptions = window.wafOptions || {};
   </script>
   <link rel="stylesheet" href="styles.css" />
@@ -43,12 +41,12 @@
       <nav class="controls">
         <p class="controls-label">CONTROLS</p>
 
-        <button id="btnReload" class="ctrl-btn">
+        <button id="btnReload" class="ctrl-btn" type="button">
           <span class="ctrl-icon">↺</span>
           <span class="ctrl-text">다시 로드</span>
         </button>
 
-        <button id="btnFullscreen" class="ctrl-btn">
+        <button id="btnFullscreen" class="ctrl-btn" type="button">
           <span class="ctrl-icon">⛶</span>
           <span class="ctrl-text">전체화면</span>
         </button>
@@ -62,9 +60,10 @@
 
       <section class="key-guide">
         <p class="controls-label">KEY GUIDE</p>
-        <div class="key-row"><span>이동</span><b>방향키</b></div>
-        <div class="key-row"><span>점프/액션</span><b>Space / Z</b></div>
         <div class="key-row"><span>시작</span><b>Enter</b></div>
+        <div class="key-row"><span>이동</span><b>방향키</b></div>
+        <div class="key-row"><span>액션</span><b>Z / X</b></div>
+        <p class="guide-note">게임 화면을 클릭한 뒤 키를 입력하세요.</p>
       </section>
 
       <section class="info-block">
@@ -86,18 +85,20 @@
         </div>
       </div>
 
-      <div class="stage-wrap">
+      <div class="stage-wrap" id="stageWrap">
         <div class="stage-corner tl"></div>
         <div class="stage-corner tr"></div>
         <div class="stage-corner bl"></div>
         <div class="stage-corner br"></div>
 
-        <div id="stage" class="stage" aria-label="게임 무대" tabindex="-1">
+        <div id="stage" class="stage" aria-label="게임 무대">
           <div id="waflashContainer">
-            <canvas class="waflashCanvas" id="canvas" tabindex="1"></canvas>
+            <canvas class="waflashCanvas" id="canvas" tabindex="0"></canvas>
             <div id="waflashStatus">Loading WAF...</div>
           </div>
         </div>
+
+        <div id="focusHint" class="focus-hint">게임 화면 클릭 후 Enter</div>
 
         <div class="drop-overlay" id="dropOverlay" aria-hidden="true">
           <div class="drop-inner">
@@ -112,8 +113,8 @@
           <summary>실행 안 될 때</summary>
           <div class="faq-body">
             <p><b>GitHub Pages</b> — <code>index.html</code>, <code>styles.css</code>, <code>favicon.png</code>, <code>assets/bubble-bobble-2.waf</code> 구조를 유지하세요.</p>
-            <p><b>로컬 실행</b> — 더블클릭보다 VSCode Live Server 또는 <code>python -m http.server</code> 실행을 권장합니다.</p>
-            <p><b>키 입력</b> — 게임 화면을 한 번 클릭한 뒤 방향키/Space/Z/Enter를 사용하세요.</p>
+            <p><b>중요</b> — 기존 버전에서 키 이벤트를 막던 로직을 제거했습니다. 이제 키 입력이 WAFlash로 직접 전달됩니다.</p>
+            <p><b>포커스</b> — 시작이 안 되면 게임 화면을 한 번 클릭한 뒤 <code>Enter</code>를 누르세요.</p>
           </div>
         </details>
       </div>
@@ -122,13 +123,14 @@
 
   <script>
     const stage         = document.getElementById('stage');
-    const stageWrap     = document.querySelector('.stage-wrap');
+    const stageWrap     = document.getElementById('stageWrap');
     const fileInput     = document.getElementById('fileInput');
     const btnReload     = document.getElementById('btnReload');
     const btnFullscreen = document.getElementById('btnFullscreen');
     const dropOverlay   = document.getElementById('dropOverlay');
     const statusDot     = document.getElementById('statusDot');
     const statusText    = document.getElementById('statusText');
+    const focusHint     = document.getElementById('focusHint');
 
     const GAME_WIDTH = 512;
     const GAME_HEIGHT = 480;
@@ -155,7 +157,7 @@
       loadingWatchTimer = setTimeout(() => {
         const wafStatus = document.getElementById('waflashStatus');
         if (wafStatus && /Loading/i.test(wafStatus.textContent || '')) {
-          wafStatus.innerHTML = 'Loading WAF...<br><small>계속 멈추면 file://가 아니라 정적 서버/GitHub Pages로 실행하세요.</small>';
+          wafStatus.innerHTML = 'Loading WAF...<br><small>계속 멈추면 GitHub Pages/정적 서버에서 실행하세요.</small>';
           setStatus('loading', '서버 실행 확인 필요');
         }
       }, 12000);
@@ -187,28 +189,25 @@
     function focusCanvas() {
       const canvas = document.getElementById('canvas');
       if (canvas) {
-        canvas.setAttribute('tabindex', '1');
+        canvas.setAttribute('tabindex', '0');
         canvas.focus({ preventScroll: true });
       }
-      window.focus();
+      try { window.focus(); } catch (e) {}
+      focusHint.classList.add('hidden');
     }
 
     function rebuildCanvas() {
       stage.innerHTML = `
         <div id="waflashContainer">
-          <canvas class="waflashCanvas" id="canvas" tabindex="1"></canvas>
+          <canvas class="waflashCanvas" id="canvas" tabindex="0"></canvas>
           <div id="waflashStatus">Loading WAF...</div>
         </div>
       `;
 
       const canvas = document.getElementById('canvas');
-      canvas.addEventListener('click', focusCanvas);
-      canvas.addEventListener('keydown', function(ev) {
-        if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space',' ','z','Z','Enter'].includes(ev.key)) {
-          ev.preventDefault();
-          ev.stopPropagation();
-        }
-      });
+      canvas.addEventListener('pointerdown', focusCanvas, { passive: true });
+      canvas.addEventListener('mousedown', focusCanvas, { passive: true });
+      canvas.addEventListener('click', focusCanvas, { passive: true });
     }
 
     function bootWaflash(src) {
@@ -216,12 +215,13 @@
       const playUrl = resolveGameUrl(src);
       window.gameConfig.swfUrl = playUrl;
       setStatus('loading', '로딩 중...');
+      focusHint.classList.remove('hidden');
       rebuildCanvas();
       resizeStage();
       startLoadingWatch();
 
       if (!window.__createWaflash) {
-        setStatus('error', 'WAFlash 준비 중');
+        setStatus('loading', 'WAFlash 준비 중...');
         return;
       }
 
@@ -239,7 +239,7 @@
         stage.innerHTML = `
           <div class="error-state">
             <div class="error-code">ERR_WAFLASH_LOAD_FAILED</div>
-            <p>WAF 파일을 불러올 수 없습니다.<br/>정적 서버/GitHub Pages로 실행 중인지 확인하세요.</p>
+            <p>WAF 파일을 불러올 수 없습니다.<br/>GitHub Pages 또는 정적 서버로 실행 중인지 확인하세요.</p>
             <button class="retry-btn" onclick="location.reload()">재시도</button>
           </div>`;
       }
@@ -294,39 +294,24 @@
       } finally {
         syncFullscreenButton();
         resizeStage();
-        focusCanvas();
+        setTimeout(focusCanvas, 80);
       }
     });
 
-    ['keydown', 'keyup'].forEach(type => {
-      document.addEventListener(type, ev => {
-        if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space',' ','z','Z','Enter'].includes(ev.key)) {
-          const active = document.activeElement;
-          const tag = active?.tagName?.toLowerCase();
-          const isTyping = tag === 'input' || tag === 'textarea' || active?.isContentEditable;
-          if (!isTyping) {
-            ev.preventDefault();
-          }
-        }
-      }, { capture: true });
-    });
+    stageWrap.addEventListener('pointerdown', focusCanvas, { passive: true });
+    stageWrap.addEventListener('click', focusCanvas, { passive: true });
 
     window.addEventListener('resize', resizeStage);
     document.addEventListener('fullscreenchange', () => {
       syncFullscreenButton();
       requestAnimationFrame(resizeStage);
       setTimeout(resizeStage, 80);
+      setTimeout(focusCanvas, 120);
     });
 
     if ('ResizeObserver' in window) {
       new ResizeObserver(() => resizeStage()).observe(stageWrap);
     }
-
-    document.addEventListener('mousedown', ev => {
-      if (stage.contains(ev.target)) {
-        focusCanvas();
-      }
-    });
 
     document.addEventListener('DOMContentLoaded', () => {
       resizeStage();
